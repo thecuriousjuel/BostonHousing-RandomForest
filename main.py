@@ -1,8 +1,13 @@
+import os
 import joblib
 import pandas as pd
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 @app.route('/', methods=['GET'])
@@ -30,9 +35,9 @@ def predict():
     data = pd.DataFrame([[CRIM, ZN,	INDUS, CHAS, NOX, RM, AGE, DIS, RAD, TAX, PTRATIO, B, LSTAT]],
                         columns=['CRIM', 'ZN', 'INDUS', 'CHAS', 'NOX', 'RM',
                                  'AGE', 'DIS', 'RAD', 'TAX', 'PTRATIO', 'B', 'LSTAT'])
-    lin_reg = joblib.load('model/random_forest.pkl')
-    numerical_transformer = joblib.load('model/num_pipeline.pkl')
-    column_transformer = joblib.load('model/full_pipeline.pkl')
+    lin_reg = joblib.load(os.path.join(BASE_DIR, 'model', 'random_forest.pkl'))
+    numerical_transformer = joblib.load(os.path.join(BASE_DIR, 'model', 'num_pipeline.pkl'))
+    column_transformer = joblib.load(os.path.join(BASE_DIR, 'model', 'full_pipeline.pkl'))
     data = data.astype('object')
     prepared_data = column_transformer.transform(data)
     output = lin_reg.predict(prepared_data)
@@ -43,4 +48,9 @@ def predict():
 
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    os.environ.pop("WERKZEUG_SERVER_FD", None)
+    os.environ.pop("WERKZEUG_RUN_MAIN", None)
+    port = int(os.environ.get("BOSTON_PORT", 5103))
+    host = os.environ.get("HOST", "127.0.0.1")
+    print(f"🚀 Boston Housing App running on http://{host}:{port}")
+    app.run(host=host, port=port, debug=False, use_reloader=False)
